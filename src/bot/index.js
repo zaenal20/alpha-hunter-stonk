@@ -493,6 +493,9 @@ export async function setupBot() {
     'scanner_poll_ms', 'monitor_poll_ms',
   ];
 
+  // Internal keys that should not be exported/imported
+  const internalKeys = ['scanner_running'];
+
   // State for import flow
   let pendingImport = null;
 

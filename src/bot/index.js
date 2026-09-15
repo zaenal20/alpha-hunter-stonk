@@ -496,10 +496,17 @@ export async function setupBot() {
   // State for import flow
   let pendingImport = null;
 
+  // Internal keys that should not be exported/imported
+  const internalKeys = ['scanner_running'];
+
   // /export_config
   bot.command('export_config', async (ctx) => {
     const config = await getAllConfig();
-    const json = JSON.stringify(config, null, 2);
+    // Filter out internal keys
+    const filtered = Object.fromEntries(
+      Object.entries(config).filter(([key]) => !internalKeys.includes(key))
+    );
+    const json = JSON.stringify(filtered, null, 2);
     const buffer = Buffer.from(json, 'utf-8');
 
     await ctx.replyWithDocument(

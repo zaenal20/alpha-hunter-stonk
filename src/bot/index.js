@@ -496,85 +496,64 @@ export async function setupBot() {
   // State for import flow
   let pendingImport = null;
 
-  // Internal keys that should not be exported/imported
-  const internalKeys = ['scanner_running'];
-
   // /export_config
   bot.command('export_config', async (ctx) => {
     const config = await getAllConfig();
-    // Filter out internal keys
     const filtered = Object.fromEntries(
       Object.entries(config).filter(([key]) => !internalKeys.includes(key))
     );
     const json = JSON.stringify(filtered, null, 2);
-    const buffer = Buffer.from(json, 'utf-8');
 
-    await ctx.replyWithDocument(
-      { source: buffer, filename: 'config.json' },
-      { caption: '📦 Config exported successfully' }
-    );
+    await ctx.reply(`<pre>${htmlEsc(json)}</pre>`, {
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+    });
   });
 
   // /import_config
   bot.command('import_config', async (ctx) => {
-    pendingImport = { chatId: ctx.chat.id, step: 'awaiting_file' };
-    ctx.reply('📂 Please send a JSON config file to import.');
+    pendingImport = { chatId: ctx.chat.id, step: 'awaiting_text' };
+    ctx.reply('📋 Paste your config JSON below:');
   });
 
-  // Handle incoming documents (import flow)
-  bot.on('document', async (ctx) => {
-    if (!pendingImport || pendingImport.chatId !== ctx.chat.id || pendingImport.step !== 'awaiting_file') return;
+  // Handle incoming text messages (import flow)
+  bot.on('text', async (ctx) => {
+    if (!pendingImport || pendingImport.chatId !== ctx.chat.id || pendingImport.step !== 'awaiting_text') return;
 
-    const doc = ctx.message.document;
+    const rawText = ctx.message.text;
 
-    // Validate file type
-    if (!doc.file_name.endsWith('.json')) {
-      return ctx.reply('❌ Invalid file. Please send a .json file.');
+    // Sanitize
+    const sanitized = sanitizeConfig(rawText);
+    if (!sanitized.ok) {
+      return ctx.reply(`❌ ${sanitized.error}\n\nPlease send valid config JSON.`);
     }
 
-    // Download file
-    try {
-      const fileLink = await ctx.telegram.getFileLink(doc.file_id);
-      const res = await fetch(fileLink.href);
-      const rawText = await res.text();
+    // Store pending
+    pendingImport.data = sanitized.data;
+    pendingImport.step = 'awaiting_confirm';
 
-      // Sanitize
-      const sanitized = sanitizeConfig(rawText);
-      if (!sanitized.ok) {
-        return ctx.reply(`❌ ${sanitized.error}\n\nPlease send a valid config JSON file.`);
-      }
+    // Show preview
+    const current = await getAllConfig();
+    let preview = '📋 <b>Import Preview</b>\n\n';
+    for (const [key, value] of Object.entries(sanitized.data)) {
+      const old = current[key] || '-';
+      const changed = old !== String(value);
+      preview += changed
+        ? `🔄 <code>${htmlEsc(key)}</code>: <code>${htmlEsc(old)}</code> → <code>${htmlEsc(String(value))}</code>\n`
+        : `✅ <code>${htmlEsc(key)}</code>: <code>${htmlEsc(String(value))}</code> (unchanged)\n`;
+    }
 
-      // Store pending
-      pendingImport.data = sanitized.data;
-      pendingImport.step = 'awaiting_confirm';
-
-      // Show preview
-      const current = await getAllConfig();
-      let preview = '📋 <b>Import Preview</b>\n\n';
-      for (const [key, value] of Object.entries(sanitized.data)) {
-        const old = current[key] || '-';
-        const changed = old !== String(value);
-        preview += changed
-          ? `🔄 <code>${htmlEsc(key)}</code>: <code>${htmlEsc(old)}</code> → <code>${htmlEsc(String(value))}</code>\n`
-          : `✅ <code>${htmlEsc(key)}</code>: <code>${htmlEsc(String(value))}</code> (unchanged)\n`;
-      }
-
-      // Send preview with inline buttons
-      await ctx.reply(preview, {
-        parse_mode: 'HTML',
-        reply_markup: {
-          inline_keyboard: [
-            [
-              { text: '✅ Confirm Import', callback_data: 'import_confirm' },
-              { text: '❌ Cancel', callback_data: 'import_cancel' },
-            ],
+    await ctx.reply(preview, {
+      parse_mode: 'HTML',
+      reply_markup: {
+        inline_keyboard: [
+          [
+            { text: '✅ Confirm Import', callback_data: 'import_confirm' },
+            { text: '❌ Cancel', callback_data: 'import_cancel' },
           ],
-        },
-      });
-    } catch (err) {
-      pendingImport = null;
-      ctx.reply(`❌ Failed to process file: ${err.message}`);
-    }
+        ],
+      },
+    });
   });
 
   // Handle inline button callbacks
@@ -606,10 +585,24 @@ export async function setupBot() {
    * Returns { ok: true, data } or { ok: false, error }
    */
   function sanitizeConfig(rawText) {
+    // Strip markdown code fences and HTML tags
+    let cleaned = rawText
+      .replace(/^```(?:json)?\n?/gm, '')  // opening ```json
+      .replace(/\n?```$/gm, '')           // closing ```
+      .replace(/<[^>]+>/g, '')             // HTML tags
+      .replace(/`/g, '')                   // inline code backticks
+      .trim();
+
+    // Try to extract JSON object if wrapped in other text
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      cleaned = jsonMatch[0];
+    }
+
     // Parse JSON
     let parsed;
     try {
-      parsed = JSON.parse(rawText);
+      parsed = JSON.parse(cleaned);
     } catch {
       return { ok: false, error: 'Invalid JSON format.' };
     }

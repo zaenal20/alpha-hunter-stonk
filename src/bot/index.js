@@ -160,6 +160,8 @@ export async function setupBot() {
       `<tr><td>/logs</td><td>View recent logs</td></tr>` +
       `<tr><td>/logs_error</td><td>View error logs</td></tr>` +
       `<tr><td>/clear_logs</td><td>Clear old logs</td></tr>` +
+      `<tr><td>/export_config</td><td>Export config as JSON</td></tr>` +
+      `<tr><td>/import_config</td><td>Import config from JSON</td></tr>` +
       `</table>` +
       `<p>${env.DRY_RUN ? '🧪 <i>DRY RUN MODE</i>' : '💰 <b>LIVE MODE</b>'}</p>`;
 
@@ -474,6 +476,171 @@ export async function setupBot() {
     const result = await db.log.deleteMany();
     ctx.reply(`🗑️ Cleared ${result.count} logs`);
   });
+
+  // ============================================================
+  // EXPORT / IMPORT CONFIG
+  // ============================================================
+
+  // Valid keys for import validation
+  const configValidKeys = [
+    'scan_mode', 'scan_sort', 'scan_pageSize',
+    'min_graduation_pct', 'max_graduation_pct',
+    'min_holders', 'require_social', 'max_dev_hold_pct',
+    'min_organicBuys1min', 'min_organicVolumeBuy1minUSD',
+    'max_bundlersHoldingsPercentage', 'max_snipersHoldingsPercentage', 'max_top10HoldingsPercentage',
+    'buy_amount_sol', 'main_stoploss_pct', 'trailing_activation_pct', 'trailing_stoploss_pct',
+    'max_open_positions', 'max_position_minutes', 'no_rebuy',
+    'scanner_poll_ms', 'monitor_poll_ms',
+  ];
+
+  // State for import flow
+  let pendingImport = null;
+
+  // /export_config
+  bot.command('export_config', async (ctx) => {
+    const config = await getAllConfig();
+    const json = JSON.stringify(config, null, 2);
+    const buffer = Buffer.from(json, 'utf-8');
+
+    await ctx.replyWithDocument(
+      { source: buffer, filename: 'config.json' },
+      { caption: '📦 Config exported successfully' }
+    );
+  });
+
+  // /import_config
+  bot.command('import_config', async (ctx) => {
+    pendingImport = { chatId: ctx.chat.id, step: 'awaiting_file' };
+    ctx.reply('📂 Please send a JSON config file to import.');
+  });
+
+  // Handle incoming documents (import flow)
+  bot.on('document', async (ctx) => {
+    if (!pendingImport || pendingImport.chatId !== ctx.chat.id || pendingImport.step !== 'awaiting_file') return;
+
+    const doc = ctx.message.document;
+
+    // Validate file type
+    if (!doc.file_name.endsWith('.json')) {
+      return ctx.reply('❌ Invalid file. Please send a .json file.');
+    }
+
+    // Download file
+    try {
+      const fileLink = await ctx.telegram.getFileLink(doc.file_id);
+      const res = await fetch(fileLink.href);
+      const rawText = await res.text();
+
+      // Sanitize
+      const sanitized = sanitizeConfig(rawText);
+      if (!sanitized.ok) {
+        return ctx.reply(`❌ ${sanitized.error}\n\nPlease send a valid config JSON file.`);
+      }
+
+      // Store pending
+      pendingImport.data = sanitized.data;
+      pendingImport.step = 'awaiting_confirm';
+
+      // Show preview
+      const current = await getAllConfig();
+      let preview = '📋 <b>Import Preview</b>\n\n';
+      for (const [key, value] of Object.entries(sanitized.data)) {
+        const old = current[key] || '-';
+        const changed = old !== String(value);
+        preview += changed
+          ? `🔄 <code>${htmlEsc(key)}</code>: <code>${htmlEsc(old)}</code> → <code>${htmlEsc(String(value))}</code>\n`
+          : `✅ <code>${htmlEsc(key)}</code>: <code>${htmlEsc(String(value))}</code> (unchanged)\n`;
+      }
+
+      // Send preview with inline buttons
+      await ctx.reply(preview, {
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✅ Confirm Import', callback_data: 'import_confirm' },
+              { text: '❌ Cancel', callback_data: 'import_cancel' },
+            ],
+          ],
+        },
+      });
+    } catch (err) {
+      pendingImport = null;
+      ctx.reply(`❌ Failed to process file: ${err.message}`);
+    }
+  });
+
+  // Handle inline button callbacks
+  bot.action('import_confirm', async (ctx) => {
+    if (!pendingImport || pendingImport.chatId !== ctx.chat.id || pendingImport.step !== 'awaiting_confirm') {
+      await ctx.answerCbQuery('No pending import');
+      return;
+    }
+
+    const data = pendingImport.data;
+    pendingImport = null;
+
+    // Apply to DB (only update keys present in import)
+    for (const [key, value] of Object.entries(data)) {
+      await setConfig(key, String(value));
+    }
+
+    await ctx.editMessageText(`✅ Config imported successfully! ${Object.keys(data).length} keys updated.`);
+    await logInfo(`Config imported: ${Object.keys(data).join(', ')}`);
+  });
+
+  bot.action('import_cancel', async (ctx) => {
+    pendingImport = null;
+    await ctx.editMessageText('❌ Import cancelled.');
+  });
+
+  /**
+   * Sanitize imported config JSON
+   * Returns { ok: true, data } or { ok: false, error }
+   */
+  function sanitizeConfig(rawText) {
+    // Parse JSON
+    let parsed;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch {
+      return { ok: false, error: 'Invalid JSON format.' };
+    }
+
+    if (typeof parsed !== 'object' || Array.isArray(parsed) || parsed === null) {
+      return { ok: false, error: 'JSON must be an object.' };
+    }
+
+    const sanitized = {};
+
+    for (const [key, rawValue] of Object.entries(parsed)) {
+      // Validate key
+      if (!configValidKeys.includes(key)) {
+        return { ok: false, error: `Unknown key: "${key}"` };
+      }
+
+      // Convert to string and sanitize
+      const value = String(rawValue).trim();
+
+      // Max length check
+      if (value.length > 100) {
+        return { ok: false, error: `Value for "${key}" too long (max 100 chars).` };
+      }
+
+      // Reject control characters (keep printable + whitespace)
+      if (/[ --]/.test(value)) {
+        return { ok: false, error: `Value for "${key}" contains invalid characters.` };
+      }
+
+      sanitized[key] = value;
+    }
+
+    if (Object.keys(sanitized).length === 0) {
+      return { ok: false, error: 'No valid config keys found in file.' };
+    }
+
+    return { ok: true, data: sanitized };
+  }
 
   // Launch bot
   await bot.launch();

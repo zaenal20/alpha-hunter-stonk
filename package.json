@@ -1,0 +1,25 @@
+{
+  "name": "alpha-hunter-stonk",
+  "version": "0.1.0",
+  "description": "Stonk.fun token sniper bot on Solana with Telegram management",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js",
+    "db:push": "npx prisma db push",
+    "db:studio": "npx prisma studio",
+    "db:generate": "npx prisma generate"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.0.0",
+    "@solana/web3.js": "^1.95.0",
+    "@solana/spl-token": "^0.4.0",
+    "bs58": "^5.0.0",
+    "telegraf": "^4.16.0",
+    "dotenv": "^16.4.0"
+  },
+  "devDependencies": {
+    "prisma": "^6.0.0"
+  }
+}

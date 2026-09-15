@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:../data.db"
+}
+
+model Config {
+  key   String @id
+  value String
+}
+
+model Position {
+  id             Int      @id @default(autoincrement())
+  token          String
+  symbol         String?
+  status         String   @default("open")
+  buyPrice       Float?   @map("buy_price")
+  buyAmountSol   Float?   @map("buy_amount_sol")
+  tokensReceived Float?   @map("tokens_received")
+  mainStoploss   Float?   @map("main_stoploss")
+  trailingStop   Float?   @map("trailing_stop")
+  trailingHigh   Float?   @map("trailing_high")
+  sellPrice      Float?   @map("sell_price")
+  sellAmountSol  Float?   @map("sell_amount_sol")
+  pnl            Float?
+  createdAt      DateTime @default(now()) @map("created_at")
+  closedAt       DateTime? @map("closed_at")
+
+  @@map("positions")
+}
+
+model SeenToken {
+  token  String   @id
+  seenAt DateTime @default(now()) @map("seen_at")
+
+  @@map("seen_tokens")
+}
+
+model Log {
+  id        Int      @id @default(autoincrement())
+  level     String   // info, warn, error, buy, sell
+  message   String
+  data      String?  // JSON string for extra context
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("logs")
+}

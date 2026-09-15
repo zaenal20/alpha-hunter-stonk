@@ -14,7 +14,7 @@ import {
   formatConfigMsg, formatPositionsMsg, formatHistoryMsg,
   formatStatusMsg, formatLogsMsg, formatErrorMsg,
   formatBuyMsg, formatSellMsg, formatLaunchMsg, formatFilterMsg,
-  formatSummaryMsg,
+  formatSummaryMsg, htmlEsc,
 } from '../utils/format.js';
 
 let bot;

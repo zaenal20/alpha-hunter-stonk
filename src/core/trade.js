@@ -17,7 +17,7 @@ function jupiterHeaders() {
 }
 
 /**
- * Buy token with SOL via Jupiter /swap/v2/order
+ * Buy token with SOL via Jupiter /swap/v2/order + /swap/v2/execute
  * Returns { hash, tokensOut, confirmed }
  */
 export async function buyWithSol(mint, solAmount, dryRun, slippageBps = 2000) {
@@ -26,10 +26,9 @@ export async function buyWithSol(mint, solAmount, dryRun, slippageBps = 2000) {
   }
 
   const wallet = getWallet();
-  const conn = getConnection();
   const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
 
-  // 1. Get order (with taker → returns assembled transaction)
+  // 1. Get order (quote + assembled transaction)
   const orderUrl = `${env.JUPITER_API_URL}/swap/v2/order?` + new URLSearchParams({
     inputMint: SOL_MINT,
     outputMint: mint,
@@ -49,48 +48,42 @@ export async function buyWithSol(mint, solAmount, dryRun, slippageBps = 2000) {
     throw new Error(`Jupiter order returned no transaction: ${JSON.stringify(orderData).slice(0, 500)}`);
   }
 
-  // 2. Get token balance BEFORE buy
-  const balanceBefore = await getTokenBalance(mint);
-
-  // 3. Deserialize, refresh blockhash, sign, send
+  // 2. Sign the transaction
   const txBuf = Buffer.from(orderData.transaction, 'base64');
   const tx = VersionedTransaction.deserialize(txBuf);
-
-  // Get fresh blockhash and replace Jupiter's (might be stale)
-  const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
-  tx.message.recentBlockhash = blockhash;
-
   tx.sign([wallet]);
+  const signedTx = Buffer.from(tx.serialize()).toString('base64');
 
-  const rawTx = tx.serialize();
-  const hash = await conn.sendRawTransaction(rawTx, {
-    skipPreflight: true,
-    maxRetries: 10,
+  // 3. Execute — Jupiter handles submission + confirmation
+  const execRes = await fetch(`${env.JUPITER_API_URL}/swap/v2/execute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...jupiterHeaders() },
+    body: JSON.stringify({
+      signedTransaction: signedTx,
+      requestId: orderData.requestId,
+    }),
   });
 
-  // 4. Wait for confirmation with fresh blockhash
-  const confirmation = await conn.confirmTransaction({
-    signature: hash,
-    blockhash,
-    lastValidBlockHeight,
-  }, 'confirmed');
-  if (confirmation.value.err) {
-    throw new Error(`Buy transaction failed: ${hash}`);
+  const result = await execRes.json();
+
+  if (result.status === 'Success') {
+    const decimals = await getTokenDecimals(mint);
+    const tokensOut = result.outputAmountResult
+      ? Number(result.outputAmountResult) / Math.pow(10, decimals)
+      : Number(orderData.outAmount) / Math.pow(10, decimals);
+
+    return {
+      hash: result.signature,
+      tokensOut,
+      confirmed: true,
+    };
   }
 
-  // 5. Get token balance AFTER buy — actual amount received
-  const balanceAfter = await getTokenBalance(mint);
-  const tokensOut = balanceAfter - balanceBefore;
-
-  return {
-    hash,
-    tokensOut: tokensOut > 0 ? tokensOut : Number(orderData.outAmount) / Math.pow(10, await getTokenDecimals(mint)),
-    confirmed: true,
-  };
+  throw new Error(`Buy failed: ${result.error || JSON.stringify(result).slice(0, 300)}`);
 }
 
 /**
- * Sell token for SOL via Jupiter /swap/v2/order
+ * Sell token for SOL via Jupiter /swap/v2/order + /swap/v2/execute
  * Returns { hash, solOut, confirmed }
  */
 export async function sellForSol(mint, tokenAmount, dryRun, slippageBps = 2000) {
@@ -99,7 +92,6 @@ export async function sellForSol(mint, tokenAmount, dryRun, slippageBps = 2000) 
   }
 
   const wallet = getWallet();
-  const conn = getConnection();
   const decimals = await getTokenDecimals(mint);
   const amountRaw = Math.floor(tokenAmount * Math.pow(10, decimals));
 
@@ -123,44 +115,37 @@ export async function sellForSol(mint, tokenAmount, dryRun, slippageBps = 2000) 
     throw new Error(`Jupiter could not build sell transaction: ${JSON.stringify(orderData).slice(0, 300)}`);
   }
 
-  // 2. Get SOL balance BEFORE sell
-  const solBefore = await getBalance();
-
-  // 3. Deserialize, refresh blockhash, sign, send
+  // 2. Sign the transaction
   const txBuf = Buffer.from(orderData.transaction, 'base64');
   const tx = VersionedTransaction.deserialize(txBuf);
-
-  // Get fresh blockhash and replace Jupiter's (might be stale)
-  const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
-  tx.message.recentBlockhash = blockhash;
-
   tx.sign([wallet]);
+  const signedTx = Buffer.from(tx.serialize()).toString('base64');
 
-  const rawTx = tx.serialize();
-  const hash = await conn.sendRawTransaction(rawTx, {
-    skipPreflight: true,
-    maxRetries: 10,
+  // 3. Execute — Jupiter handles submission + confirmation
+  const execRes = await fetch(`${env.JUPITER_API_URL}/swap/v2/execute`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...jupiterHeaders() },
+    body: JSON.stringify({
+      signedTransaction: signedTx,
+      requestId: orderData.requestId,
+    }),
   });
 
-  // 4. Wait for confirmation with fresh blockhash
-  const confirmation = await conn.confirmTransaction({
-    signature: hash,
-    blockhash,
-    lastValidBlockHeight,
-  }, 'confirmed');
-  if (confirmation.value.err) {
-    throw new Error(`Sell transaction failed: ${hash}`);
+  const result = await execRes.json();
+
+  if (result.status === 'Success') {
+    const solOut = result.outputAmountResult
+      ? Number(result.outputAmountResult) / LAMPORTS_PER_SOL
+      : Number(orderData.outAmount) / LAMPORTS_PER_SOL;
+
+    return {
+      hash: result.signature,
+      solOut,
+      confirmed: true,
+    };
   }
 
-  // 5. Get SOL balance AFTER sell — actual amount received
-  const solAfter = await getBalance();
-  const solOut = solAfter - solBefore;
-
-  return {
-    hash,
-    solOut: solOut > 0 ? solOut : Number(orderData.outAmount) / LAMPORTS_PER_SOL,
-    confirmed: true,
-  };
+  throw new Error(`Sell failed: ${result.error || JSON.stringify(result).slice(0, 300)}`);
 }
 
 /**

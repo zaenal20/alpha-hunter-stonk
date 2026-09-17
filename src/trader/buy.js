@@ -42,29 +42,11 @@ export async function buyToken(mint, meta, config) {
       return;
     }
 
-    // Get actual tokens received
+    // Get actual tokens received (from Jupiter execute or dry run estimate)
     let tokensReceived = result.tokensOut || 0;
 
-    // For dry run, estimate from price
     if (env.DRY_RUN && tokensReceived === 0) {
-      let currentPrice = await getCurrentPrice(mint);
-
-      // Fallback: stonk.fun priceUsd → SOL
-      if (!currentPrice || currentPrice <= 0) {
-        const info = await (await import('../core/trade.js')).getTokenInfo(mint);
-        const priceUsd = info?.token?.market?.priceUsd;
-        if (priceUsd > 0) {
-          const solRes = await fetch(`https://api.jup.ag/price/v3?ids=So11111111111111111111111111111111111111112`, {
-            headers: env.JUPITER_API_KEY ? { 'x-api-key': env.JUPITER_API_KEY } : {},
-          });
-          if (solRes.ok) {
-            const solData = await solRes.json();
-            const solUsd = solData?.So11111111111111111111111111111111111111112?.usdPrice;
-            if (solUsd > 0) currentPrice = priceUsd / solUsd;
-          }
-        }
-      }
-
+      const currentPrice = await getCurrentPrice(mint);
       if (currentPrice > 0) {
         tokensReceived = buyAmountSol / currentPrice;
       } else {
@@ -73,7 +55,7 @@ export async function buyToken(mint, meta, config) {
       }
     }
 
-    // Calculate actual execution price from SOL spent / tokens received
+    // Calculate actual execution price
     const actualBuyPrice = tokensReceived > 0 ? buyAmountSol / tokensReceived : 0;
 
     // Calculate stoploss levels from actual execution price

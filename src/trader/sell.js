@@ -104,6 +104,7 @@ export async function sellToken(positionId, reason) {
     const slippageBps = parseInt((await (await import('../db/index.js')).getConfig('slippageBps')) || '2000');
     const result = await executeSellWithRetry(position.token, balance,3, slippageBps);
 
+    // Use Jupiter's actual output amount
     const solReceived = result.solOut || 0;
 
     // Calculate PnL from actual SOL amounts (not API price)

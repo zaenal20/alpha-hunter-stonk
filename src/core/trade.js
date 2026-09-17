@@ -52,9 +52,14 @@ export async function buyWithSol(mint, solAmount, dryRun) {
   // 2. Get token balance BEFORE buy
   const balanceBefore = await getTokenBalance(mint);
 
-  // 3. Deserialize, sign, send
+  // 3. Deserialize, refresh blockhash, sign, send
   const txBuf = Buffer.from(orderData.transaction, 'base64');
   const tx = VersionedTransaction.deserialize(txBuf);
+
+  // Get fresh blockhash and replace Jupiter's (might be stale)
+  const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
+  tx.message.recentBlockhash = blockhash;
+
   tx.sign([wallet]);
 
   const rawTx = tx.serialize();
@@ -63,12 +68,11 @@ export async function buyWithSol(mint, solAmount, dryRun) {
     maxRetries: 10,
   });
 
-  // 4. Wait for confirmation (use blockhash from the transaction itself)
-  const latestBlockHeight = await conn.getBlockHeight('confirmed');
+  // 4. Wait for confirmation with fresh blockhash
   const confirmation = await conn.confirmTransaction({
     signature: hash,
-    blockhash: tx.message.recentBlockhash,
-    lastValidBlockHeight: latestBlockHeight + 150,
+    blockhash,
+    lastValidBlockHeight,
   }, 'confirmed');
   if (confirmation.value.err) {
     throw new Error(`Buy transaction failed: ${hash}`);
@@ -122,9 +126,14 @@ export async function sellForSol(mint, tokenAmount, dryRun) {
   // 2. Get SOL balance BEFORE sell
   const solBefore = await getBalance();
 
-  // 3. Deserialize, sign, send
+  // 3. Deserialize, refresh blockhash, sign, send
   const txBuf = Buffer.from(orderData.transaction, 'base64');
   const tx = VersionedTransaction.deserialize(txBuf);
+
+  // Get fresh blockhash and replace Jupiter's (might be stale)
+  const { blockhash, lastValidBlockHeight } = await conn.getLatestBlockhash('confirmed');
+  tx.message.recentBlockhash = blockhash;
+
   tx.sign([wallet]);
 
   const rawTx = tx.serialize();
@@ -133,12 +142,11 @@ export async function sellForSol(mint, tokenAmount, dryRun) {
     maxRetries: 10,
   });
 
-  // 4. Wait for confirmation (use blockhash from the transaction itself)
-  const latestBlockHeight = await conn.getBlockHeight('confirmed');
+  // 4. Wait for confirmation with fresh blockhash
   const confirmation = await conn.confirmTransaction({
     signature: hash,
-    blockhash: tx.message.recentBlockhash,
-    lastValidBlockHeight: latestBlockHeight + 150,
+    blockhash,
+    lastValidBlockHeight,
   }, 'confirmed');
   if (confirmation.value.err) {
     throw new Error(`Sell transaction failed: ${hash}`);

@@ -154,7 +154,8 @@ export async function startScanner(notifyFn) {
             || (parseFloat(config.min_organicVolumeBuy1minUSD || '0') >0)
             || (parseFloat(config.max_bundlersHoldingsPercentage || '100') <100)
             || (parseFloat(config.max_snipersHoldingsPercentage || '100') <100)
-            || (parseFloat(config.max_top10HoldingsPercentage || '100') <100);
+            || (parseFloat(config.max_top10HoldingsPercentage || '100') <100)
+            || (parseFloat(config.max_priceChange5minPercentage || '0') >0);
 
           let result = basicResult;
           let mobulaData = null;
@@ -196,6 +197,7 @@ export async function startScanner(notifyFn) {
           if (parseFloat(config.max_bundlersHoldingsPercentage || '100') <100) filterParts.push(`Bundlers: ${(mobulaData?.bundlersHoldingsPercentage ||0).toFixed(1)}%`);
           if (parseFloat(config.max_snipersHoldingsPercentage || '100') <100) filterParts.push(`Snipers: ${(mobulaData?.snipersHoldingsPercentage ||0).toFixed(1)}%`);
           if (parseFloat(config.max_top10HoldingsPercentage || '100') <100) filterParts.push(`Top10: ${(mobulaData?.top10HoldingsPercentage ||0).toFixed(1)}%`);
+          if (parseFloat(config.max_priceChange5minPercentage || '0') >0) filterParts.push(`PriceChg5m: ${(mobulaData?.priceChange5minPercentage ||0).toFixed(1)}%`);
 
           await logInfo(`${meta.symbol} passed filters [${filterParts.join(', ')}], buying...`);
 

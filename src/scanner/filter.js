@@ -175,6 +175,15 @@ export async function checkFilters(tokenData, filters, holdersData = null, mobul
         return { pass: false, reason: `Top10 hold ${top10.toFixed(1)}% (max: ${maxTop10}%)`, meta };
       }
     }
+
+    // Price change 5min %
+    const maxPriceChange = parseFloat(filters.max_priceChange5minPercentage || '0');
+    if (maxPriceChange > 0) {
+      const priceChange = mobulaData.priceChange5minPercentage || 0;
+      if (priceChange > maxPriceChange) {
+        return { pass: false, reason: `Price +${priceChange.toFixed(1)}% 5m (max: ${maxPriceChange}%)`, meta };
+      }
+    }
   }
 
   return { pass: true, reason: 'All filters passed', meta };

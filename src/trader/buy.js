@@ -33,7 +33,8 @@ export async function buyToken(mint, meta, config) {
 
   try {
     // Execute buy via Jupiter
-    const result = await buyWithSol(mint, buyAmountSol, env.DRY_RUN);
+    const slippageBps = parseInt(config.slippageBps || '2000');
+    const result = await buyWithSol(mint, buyAmountSol, env.DRY_RUN, slippageBps);
 
     // Check if transaction confirmed (skip for dry run)
     if (!env.DRY_RUN && !result.confirmed) {

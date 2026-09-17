@@ -14,10 +14,10 @@ const RETRY_DELAY_MS = 2000;
 /**
  * Execute sell with retry
  */
-async function executeSellWithRetry(token, balance, retries = MAX_RETRIES) {
+async function executeSellWithRetry(token, balance, retries = MAX_RETRIES, slippageBps = 2000) {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      return await sellForSol(token, balance, false);
+      return await sellForSol(token, balance, false, slippageBps);
     } catch (err) {
       if (attempt < retries) {
         await logWarn(`Sell attempt ${attempt}/${retries} failed: ${err.message}, retrying...`);
@@ -101,7 +101,8 @@ export async function sellToken(positionId, reason) {
     }
 
     // Execute sell with retry
-    const result = await executeSellWithRetry(position.token, balance);
+    const slippageBps = parseInt((await (await import('../db/index.js')).getConfig('slippageBps')) || '2000');
+    const result = await executeSellWithRetry(position.token, balance,3, slippageBps);
 
     const solReceived = result.solOut || 0;
 

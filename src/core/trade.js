@@ -20,7 +20,7 @@ function jupiterHeaders() {
  * Buy token with SOL via Jupiter /swap/v2/order
  * Returns { hash, tokensOut, confirmed }
  */
-export async function buyWithSol(mint, solAmount, dryRun) {
+export async function buyWithSol(mint, solAmount, dryRun, slippageBps = 2000) {
   if (dryRun) {
     return { hash: 'DRY_RUN', tokensOut: 0, confirmed: true };
   }
@@ -35,7 +35,7 @@ export async function buyWithSol(mint, solAmount, dryRun) {
     outputMint: mint,
     amount: String(lamports),
     taker: wallet.publicKey.toBase58(),
-    slippageBps: '500',
+    slippageBps: String(slippageBps),
   });
 
   const orderRes = await fetch(orderUrl, { headers: jupiterHeaders() });
@@ -93,7 +93,7 @@ export async function buyWithSol(mint, solAmount, dryRun) {
  * Sell token for SOL via Jupiter /swap/v2/order
  * Returns { hash, solOut, confirmed }
  */
-export async function sellForSol(mint, tokenAmount, dryRun) {
+export async function sellForSol(mint, tokenAmount, dryRun, slippageBps = 2000) {
   if (dryRun) {
     return { hash: 'DRY_RUN', solOut: 0, confirmed: true };
   }
@@ -109,7 +109,7 @@ export async function sellForSol(mint, tokenAmount, dryRun) {
     outputMint: SOL_MINT,
     amount: String(amountRaw),
     taker: wallet.publicKey.toBase58(),
-    slippageBps: '500',
+    slippageBps: String(slippageBps),
   });
 
   const orderRes = await fetch(orderUrl, { headers: jupiterHeaders() });

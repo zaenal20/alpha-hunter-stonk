@@ -304,7 +304,7 @@ export function formatHistoryMsg(positions) {
 export function formatConfigMsg(config, dryRun) {
   const categories = {
     '🔍 Scanner': ['scan_mode', 'scan_sort', 'scan_pageSize', 'min_graduation_pct', 'max_graduation_pct', 'max_open_positions', 'no_rebuy'],
-    '🎯 Filter': ['min_holders', 'require_social', 'max_dev_hold_pct',
+    '🎯 Filter': ['min_liquidityUsd', 'min_holders', 'require_social', 'max_dev_hold_pct',
       'min_organicBuys1min', 'min_organicVolumeBuy1minUSD',
       'max_bundlersHoldingsPercentage', 'max_snipersHoldingsPercentage', 'max_top10HoldingsPercentage'],
     '💰 Trade': ['buy_amount_sol', 'main_stoploss_pct', 'trailing_activation_pct', 'trailing_stoploss_pct', 'max_position_minutes'],

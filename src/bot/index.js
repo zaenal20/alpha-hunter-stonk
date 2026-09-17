@@ -254,7 +254,7 @@ export async function setupBot() {
       'buy_amount_sol', 'main_stoploss_pct', 'trailing_activation_pct', 'trailing_stoploss_pct',
       'scanner_poll_ms', 'monitor_poll_ms', 'max_open_positions', 'max_position_minutes',
       'no_rebuy', 'max_dev_hold_pct',
-      'min_organicBuys1min', 'min_organicVolumeBuy1minUSD',
+      'min_liquidityUsd', 'min_organicBuys1min', 'min_organicVolumeBuy1minUSD',
       'max_bundlersHoldingsPercentage', 'max_snipersHoldingsPercentage', 'max_top10HoldingsPercentage',
     ];
 
@@ -486,7 +486,7 @@ export async function setupBot() {
     'scan_mode', 'scan_sort', 'scan_pageSize',
     'min_graduation_pct', 'max_graduation_pct',
     'min_holders', 'require_social', 'max_dev_hold_pct',
-    'min_organicBuys1min', 'min_organicVolumeBuy1minUSD',
+    'min_liquidityUsd', 'min_organicBuys1min', 'min_organicVolumeBuy1minUSD',
     'max_bundlersHoldingsPercentage', 'max_snipersHoldingsPercentage', 'max_top10HoldingsPercentage',
     'buy_amount_sol', 'main_stoploss_pct', 'trailing_activation_pct', 'trailing_stoploss_pct',
     'max_open_positions', 'max_position_minutes', 'no_rebuy',

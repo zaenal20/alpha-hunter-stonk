@@ -29,6 +29,7 @@ const DEFAULTS = {
   max_bundlersHoldingsPercentage: '100',
   max_snipersHoldingsPercentage: '100',
   max_top10HoldingsPercentage: '100',
+  min_liquidityUsd: '0',
 
   // Trade
   buy_amount_sol: '0.01',

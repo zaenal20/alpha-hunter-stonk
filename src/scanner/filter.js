@@ -95,6 +95,15 @@ export async function checkFilters(tokenData, filters, holdersData = null, mobul
     devHoldPct: holdersData?.devHoldPct || 0,
   };
 
+  // Liquidity filter (from stonk.fun market data)
+  const minLiquidity = parseFloat(filters.min_liquidityUsd || '0');
+  if (minLiquidity > 0) {
+    const liquidity = meta.liquidityUsd;
+    if (liquidity < minLiquidity) {
+      return { pass: false, reason: `Liquidity $${liquidity.toFixed(0)} (min: $${minLiquidity})`, meta };
+    }
+  }
+
   // Social check
   if (filters.require_social === 'true') {
     const links = token.links || {};
